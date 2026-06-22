@@ -5,32 +5,27 @@ import {
   Plus, UploadSimple,
 } from '@phosphor-icons/react'
 import { detectEyeTransform, generateTryOnResult } from './services/faceLandmarker'
+import { removeGlassesBackground, validateImageFile } from './services/backgroundRemoval'
 
 const asset = (name) => `${import.meta.env.BASE_URL}${name}`
 const DEFAULT_FACE = asset('sample-face.jpg')
 const DEFAULT_GLASSES = [1, 2, 3, 4, 5].map((i) => asset(`glasses-${i}.png`))
 const INITIAL_TRANSFORM = { x: 50, y: 40, width: 43, rotation: 0 }
 
-function readFile(file, setter) {
-  if (!file) return
-  if (!['image/jpeg', 'image/png'].includes(file.type)) return alert('请上传 JPG 或 PNG 图片')
-  setter(URL.createObjectURL(file))
-}
-
-function UploadBox({ step, title, hint, image, onChange, compactLabel }) {
+function UploadBox({ step, title, hint, image, onUpload, compactLabel, statusText, disabled = false }) {
   const id = `upload-${step}`
   return (
     <section className="step-card">
       <div className="step-title"><span>{step}</span>{title}<Info size={15} weight="bold" /></div>
-      <label className="dropzone" htmlFor={id}>
+      <label className={`dropzone ${disabled ? 'processing' : ''}`} htmlFor={id}>
         <UploadSimple size={34} weight="regular" />
         <strong>点击上传{compactLabel}</strong>
         <small>{hint}</small>
       </label>
-      <input id={id} hidden type="file" accept="image/jpeg,image/png" onChange={(e) => readFile(e.target.files[0], onChange)} />
+      <input id={id} hidden disabled={disabled} type="file" accept="image/jpeg,image/png" onChange={(e) => onUpload(e.target.files[0])} />
       <div className="upload-status">
         <img src={image} alt="已上传缩略图" />
-        <span>{image === DEFAULT_FACE ? '示例照片' : '已上传'}</span>
+        <span>{statusText || (image === DEFAULT_FACE ? '示例照片' : '已上传')}</span>
         <label htmlFor={id}><ArrowClockwise size={15} /> 更换{step === 1 ? '照片' : '眼镜'}</label>
       </div>
     </section>
@@ -39,18 +34,48 @@ function UploadBox({ step, title, hint, image, onChange, compactLabel }) {
 
 function ResultStage({ face, glasses, transform, setTransform, editable = false, stageRef }) {
   const drag = useRef(null)
+  const pointers = useRef(new Map())
+  const gesture = useRef(null)
+  const pointerPair = () => [...pointers.current.values()]
+  const distance = (a, b) => Math.hypot(b.x - a.x, b.y - a.y)
+  const angle = (a, b) => Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI
   const onPointerDown = (e) => {
     if (!editable) return
     e.currentTarget.setPointerCapture(e.pointerId)
-    drag.current = { sx: e.clientX, sy: e.clientY, x: transform.x, y: transform.y }
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 1) {
+      drag.current = { sx: e.clientX, sy: e.clientY, x: transform.x, y: transform.y }
+    } else if (pointers.current.size === 2) {
+      const [a, b] = pointerPair()
+      drag.current = null
+      gesture.current = { distance: distance(a, b), angle: angle(a, b), width: transform.width, rotation: transform.rotation }
+    }
   }
   const onPointerMove = (e) => {
-    if (!drag.current || !stageRef.current) return
+    if (!pointers.current.has(e.pointerId) || !stageRef.current) return
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 2 && gesture.current) {
+      const [a, b] = pointerPair()
+      const scale = distance(a, b) / Math.max(1, gesture.current.distance)
+      const rotationDelta = angle(a, b) - gesture.current.angle
+      setTransform((t) => ({ ...t,
+        width: Math.max(15, Math.min(90, gesture.current.width * scale)),
+        rotation: gesture.current.rotation + rotationDelta,
+      }))
+      return
+    }
+    if (!drag.current) return
     const rect = stageRef.current.getBoundingClientRect()
     setTransform((t) => ({ ...t,
       x: Math.max(0, Math.min(100, drag.current.x + ((e.clientX - drag.current.sx) / rect.width) * 100)),
       y: Math.max(0, Math.min(100, drag.current.y + ((e.clientY - drag.current.sy) / rect.height) * 100)),
     }))
+  }
+  const onPointerEnd = (e) => {
+    pointers.current.delete(e.pointerId)
+    gesture.current = null
+    const remaining = pointerPair()[0]
+    drag.current = remaining ? { sx: remaining.x, sy: remaining.y, x: transform.x, y: transform.y } : null
   }
   return (
     <div className="photo-stage" ref={stageRef}>
@@ -58,7 +83,7 @@ function ResultStage({ face, glasses, transform, setTransform, editable = false,
       {editable && <img
         className="glasses-overlay" src={glasses} alt="叠加眼镜"
         onPointerDown={onPointerDown} onPointerMove={onPointerMove}
-        onPointerUp={() => { drag.current = null }} onPointerCancel={() => { drag.current = null }}
+        onPointerUp={onPointerEnd} onPointerCancel={onPointerEnd}
         style={{ left: `${transform.x}%`, top: `${transform.y}%`, width: `${transform.width}%`, transform: `translate(-50%, -50%) rotate(${transform.rotation}deg)` }}
       />}
     </div>
@@ -71,7 +96,9 @@ export function App() {
   const [transform, setTransform] = useState(INITIAL_TRANSFORM)
   const [generated, setGenerated] = useState(true)
   const [detecting, setDetecting] = useState(false)
-  const [notice, setNotice] = useState('拖动眼镜可微调位置')
+  const [processingBackground, setProcessingBackground] = useState(false)
+  const [glassesStatus, setGlassesStatus] = useState('默认透明素材')
+  const [notice, setNotice] = useState('单指拖动，双指缩放和旋转')
   const imageProbe = useRef(null)
   const leftStage = useRef(null)
   const resultStage = useRef(null)
@@ -96,6 +123,28 @@ export function App() {
     await generateTryOnResult(face, glasses)
     await autoFit()
     setGenerated(true)
+  }
+
+  const uploadFace = (file) => {
+    try { if (validateImageFile(file)) setFace(URL.createObjectURL(file)) }
+    catch (error) { alert(error.message) }
+  }
+
+  const uploadGlasses = async (file) => {
+    if (!file) return
+    setProcessingBackground(true)
+    setGlassesStatus('正在自动去除背景…')
+    try {
+      const transparentImage = await removeGlassesBackground(file)
+      setGlasses(transparentImage)
+      setGlassesStatus('已自动去除背景')
+      setGenerated(true)
+      setNotice('背景已透明化，可单指拖动、双指缩放')
+    } catch (error) {
+      try { validateImageFile(file); setGlasses(URL.createObjectURL(file)); setGlassesStatus('背景处理失败，已使用原图') }
+      catch { setGlassesStatus('请选择 JPG / PNG 图片') }
+      alert(error.message)
+    } finally { setProcessingBackground(false) }
   }
 
   useEffect(() => { if (generated) autoFit() }, [face]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -125,8 +174,8 @@ export function App() {
       <main className="workspace">
         <aside className="sidebar panel">
           <div className="sidebar-heading"><h1>虚拟眼镜试戴</h1><p>上传照片和眼镜，看看适合你的效果</p></div>
-          <UploadBox step={1} title="上传正脸照片" compactLabel="正脸照片" hint="支持 JPG / PNG，文件不超过 10MB" image={face} onChange={setFace} />
-          <UploadBox step={2} title="上传眼镜图片" compactLabel="眼镜图片" hint="支持 JPG / PNG，建议使用透明背景" image={glasses} onChange={setGlasses} />
+          <UploadBox step={1} title="上传正脸照片" compactLabel="正脸照片" hint="支持 JPG / PNG，文件不超过 10MB" image={face} onUpload={uploadFace} />
+          <UploadBox step={2} title="上传眼镜图片" compactLabel="眼镜图片" hint="支持 JPG / PNG，自动去除纯色或简洁背景" image={glasses} onUpload={uploadGlasses} statusText={glassesStatus} disabled={processingBackground} />
           <section className="step-card generate-card">
             <div className="step-title"><span>3</span>生成效果</div>
             <button className="primary" onClick={generate} disabled={detecting}><MagicWand size={18} weight="fill" />{detecting ? '识别人脸中…' : '生成试戴效果'}</button>
@@ -147,7 +196,7 @@ export function App() {
               <div className="photo-wrap"><span className="image-label">试戴效果</span>{generated && <ResultStage face={face} glasses={glasses} transform={transform} setTransform={setTransform} editable stageRef={resultStage} />}</div>
             </div>
             <div className="adjust-bar" aria-label="眼镜调整工具">
-              <span><ArrowsOutCardinal size={16} />拖动调整</span>
+              <span><ArrowsOutCardinal size={16} />单指拖动 · 双指缩放</span>
               <button title="缩小" onClick={() => setTransform(t => ({...t, width: Math.max(15, t.width - 3)}))}><Minus /></button>
               <span>{Math.round(transform.width)}%</span>
               <button title="放大" onClick={() => setTransform(t => ({...t, width: Math.min(90, t.width + 3)}))}><Plus /></button>
@@ -162,9 +211,9 @@ export function App() {
             <h2>眼镜样式选择</h2>
             <div className="styles-row">
               <label className="upload-style" htmlFor="style-upload"><Plus size={28} /><span>上传眼镜</span></label>
-              <input id="style-upload" hidden type="file" accept="image/jpeg,image/png" onChange={(e) => readFile(e.target.files[0], setGlasses)} />
+              <input id="style-upload" hidden type="file" accept="image/jpeg,image/png" onChange={(e) => uploadGlasses(e.target.files[0])} />
               {DEFAULT_GLASSES.map((src, i) => (
-                <button className={`style-card ${glasses === src ? 'selected' : ''}`} key={src} onClick={() => { setGlasses(src); setGenerated(true) }}>
+                <button className={`style-card ${glasses === src ? 'selected' : ''}`} key={src} onClick={() => { setGlasses(src); setGlassesStatus('默认透明素材'); setGenerated(true) }}>
                   <img src={src} alt={`默认眼镜样式 ${i + 1}`} />
                   {glasses === src && <CheckCircle size={22} weight="fill" />}
                 </button>
