@@ -7,11 +7,16 @@ import {
 import { detectEyeTransform, generateTryOnResult } from './services/faceLandmarker'
 import { removeGlassesBackground, validateImageFile } from './services/backgroundRemoval'
 import { FaceAnalysisPanel } from './components/FaceAnalysisPanel'
+import { IdentityTest } from './components/IdentityTest'
+import { IdentityResult } from './components/IdentityResult'
+import { generateVisualIdentity } from './utils/visualIdentity'
 
 const asset = (name) => `${import.meta.env.BASE_URL}${name}`
 const DEFAULT_FACE = asset('sample-face.jpg')
 const DEFAULT_GLASSES = [1, 2, 3, 4, 5].map((i) => asset(`glasses-${i}.png`))
 const INITIAL_TRANSFORM = { x: 50, y: 40, width: 43, rotation: 0 }
+const BASE_PATH = import.meta.env.BASE_URL
+const getRoute = () => window.location.pathname.replace(BASE_PATH, '').replace(/^\//, '')
 
 function UploadBox({ step, title, hint, image, onUpload, compactLabel, statusText, disabled = false }) {
   const id = `upload-${step}`
@@ -98,11 +103,18 @@ export function App() {
   const [generated, setGenerated] = useState(true)
   const [detecting, setDetecting] = useState(false)
   const [processingBackground, setProcessingBackground] = useState(false)
+  const [uploadedGlasses, setUploadedGlasses] = useState([])
   const [glassesStatus, setGlassesStatus] = useState('默认透明素材')
   const [notice, setNotice] = useState('单指拖动，双指缩放和旋转')
+  const [route, setRoute] = useState(getRoute)
+  const [identityResult, setIdentityResult] = useState(() => { try { return JSON.parse(sessionStorage.getItem('visualIdentity')) } catch { return null } })
+  const [identityApplied, setIdentityApplied] = useState(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const imageProbe = useRef(null)
   const leftStage = useRef(null)
   const resultStage = useRef(null)
+  const navigate = useCallback((next = '') => { window.history.pushState({}, '', `${BASE_PATH}${next}`); setRoute(next) }, [])
+  useEffect(() => { const handler=()=>setRoute(getRoute()); window.addEventListener('popstate',handler); return()=>window.removeEventListener('popstate',handler) }, [])
 
   const autoFit = useCallback(async () => {
     setDetecting(true)
@@ -158,6 +170,45 @@ export function App() {
     setTimeout(() => resultStage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
   }
 
+  const uploadMultipleGlasses = async (files) => {
+    const selectedFiles = Array.from(files || [])
+    if (!selectedFiles.length) return
+    setProcessingBackground(true)
+    setGlassesStatus(`正在处理 0 / ${selectedFiles.length} 张图片…`)
+    const completed = []
+    for (let index = 0; index < selectedFiles.length; index += 1) {
+      try {
+        validateImageFile(selectedFiles[index])
+        completed.push(await removeGlassesBackground(selectedFiles[index]))
+        setGlassesStatus(`正在处理 ${index + 1} / ${selectedFiles.length} 张图片…`)
+      } catch (error) {
+        console.warn(`跳过无法处理的图片：${selectedFiles[index].name}`, error)
+      }
+    }
+    if (completed.length) {
+      setUploadedGlasses(current => [...current, ...completed])
+      setGlasses(completed[0])
+      setGenerated(true)
+      setGlassesStatus(`已添加 ${completed.length} 副眼镜并自动去除背景`)
+      setNotice('新眼镜已加入内部眼镜库，可拖动、缩放和旋转')
+    } else {
+      setGlassesStatus('未能添加图片，请选择清晰的 JPG / PNG')
+      alert('所选图片未能完成处理，请换一组 JPG / PNG 图片重试')
+    }
+    setProcessingBackground(false)
+  }
+
+  const completeIdentityTest = (answers) => {
+    const result = generateVisualIdentity(answers)
+    setIdentityResult(result); sessionStorage.setItem('visualIdentity', JSON.stringify(result)); navigate('identity-result')
+  }
+
+  const applyIdentityToTryOn = (result) => {
+    const first = result.recommendations[0]
+    setIdentityApplied(result); setGlasses(DEFAULT_GLASSES[first.styleIndex]); setGlassesStatus(`视觉身份推荐：${first.name}`)
+    setGenerated(true); setNotice(`${result.strategy} 策略已应用，推荐顺序与匹配度已更新`); navigate('')
+  }
+
   useEffect(() => { if (generated) autoFit() }, [face]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const download = async () => {
@@ -175,22 +226,39 @@ export function App() {
     const a = document.createElement('a'); a.download = 'virtual-glasses-try-on.png'; a.href = canvas.toDataURL('image/png'); a.click()
   }
 
+  const appHeader = <header className="topbar">
+    <button className="brand" onClick={() => navigate('')}><Eyeglasses size={35} weight="regular" /><strong>Virtual Glasses Try-On</strong></button>
+    <nav className="flow-nav"><button className={!route ? 'active' : ''} onClick={() => navigate('')}>Quick Try-On</button><button className={route.startsWith('identity') ? 'active' : ''} onClick={() => navigate('identity-test')}>Visual Identity</button></nav>
+    <button className="language"><Globe size={19} /> 简体中文 <CaretDown size={14} /></button>
+  </header>
+
+  if (route === 'identity-test') return <div className="app-shell editorial-shell">{appHeader}<IdentityTest faceImage={face} onBack={() => navigate('')} onComplete={completeIdentityTest}/></div>
+  if (route === 'identity-result') return <div className="app-shell editorial-shell">{appHeader}<IdentityResult result={identityResult || generateVisualIdentity([0,0,0,0,0])} faceImage={face} onBack={() => navigate('identity-test')} onApply={applyIdentityToTryOn}/></div>
+
+  const allLibraryGlasses = [...DEFAULT_GLASSES, ...uploadedGlasses]
+  const rankedGlasses = identityApplied ? [...identityApplied.recommendations.map(r => DEFAULT_GLASSES[r.styleIndex]), ...allLibraryGlasses].filter((v,i,a)=>a.indexOf(v)===i) : allLibraryGlasses
+
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div className="brand"><Eyeglasses size={35} weight="regular" /><strong>Virtual Glasses Try-On</strong></div>
-        <button className="language"><Globe size={19} /> 简体中文 <CaretDown size={14} /></button>
-      </header>
+      {appHeader}
 
       <main className="workspace">
         <aside className="sidebar panel">
+          <div className="editorial-kicker"><strong>VIRTUAL<br/><i>TRY-ON</i></strong><span>试戴，从此更简单</span><small>No.06</small></div>
           <div className="sidebar-heading"><h1>虚拟眼镜试戴</h1><p>上传照片和眼镜，看看适合你的效果</p></div>
           <UploadBox step={1} title="上传正脸照片" compactLabel="正脸照片" hint="支持 JPG / PNG，文件不超过 10MB" image={face} onUpload={uploadFace} />
-          <UploadBox step={2} title="上传眼镜图片" compactLabel="眼镜图片" hint="支持 JPG / PNG，自动去除纯色或简洁背景" image={glasses} onUpload={uploadGlasses} statusText={glassesStatus} disabled={processingBackground} />
+          <section className="step-card library-step">
+            <div className="step-title"><span>2</span>选择眼镜<Info size={15} weight="bold" /></div>
+            <button className="library-entry" onClick={() => setLibraryOpen(true)}>
+              <Eyeglasses size={32} /><span><strong>打开眼镜库</strong><small>从内置镜框中选择并加入试戴</small></span><b>→</b>
+            </button>
+            <div className="upload-status"><img src={glasses} alt="当前眼镜" /><span>{glassesStatus}</span></div>
+          </section>
           <section className="step-card generate-card">
             <div className="step-title"><span>3</span>生成效果</div>
             <button className="primary" onClick={generate} disabled={detecting}><MagicWand size={18} weight="fill" />{detecting ? '识别人脸中…' : '生成试戴效果'}</button>
           </section>
+          <button className="identity-entry" onClick={() => navigate('identity-test')}>Discover Your Visual Identity <span>→</span></button>
         </aside>
 
         <section className="content-area">
@@ -219,14 +287,15 @@ export function App() {
           </div>
 
           <div className="styles-panel panel">
-            <h2>眼镜样式选择</h2>
+            <div className="styles-heading"><h2>眼镜样式选择</h2><button onClick={() => setLibraryOpen(true)}>进入眼镜库 <span>→</span></button></div>
             <div className="styles-row">
-              <label className="upload-style" htmlFor="style-upload"><Plus size={28} /><span>上传眼镜</span></label>
-              <input id="style-upload" hidden type="file" accept="image/jpeg,image/png" onChange={(e) => uploadGlasses(e.target.files[0])} />
-              {DEFAULT_GLASSES.map((src, i) => (
+              <label className={`upload-style ${processingBackground ? 'processing' : ''}`} htmlFor="style-upload"><Plus size={28} /><span>{processingBackground ? '正在透明化…' : '批量上传眼镜'}</span><small>可同时选择多张</small></label>
+              <input id="style-upload" hidden multiple disabled={processingBackground} type="file" accept="image/jpeg,image/png" onChange={(e) => { uploadMultipleGlasses(e.target.files); e.target.value = '' }} />
+              {rankedGlasses.map((src, i) => (
                 <button className={`style-card ${glasses === src ? 'selected' : ''}`} key={src} onClick={() => { setGlasses(src); setGlassesStatus('默认透明素材'); setGenerated(true) }}>
                   <img src={src} alt={`默认眼镜样式 ${i + 1}`} />
                   {glasses === src && <CheckCircle size={22} weight="fill" />}
+                  {identityApplied && identityApplied.recommendations.find(r=>DEFAULT_GLASSES[r.styleIndex]===src) && <em className="identity-score">{identityApplied.recommendations.find(r=>DEFAULT_GLASSES[r.styleIndex]===src).identityScore}%</em>}
                 </button>
               ))}
             </div>
@@ -234,6 +303,21 @@ export function App() {
           <FaceAnalysisPanel faceImage={face} onTryFrame={tryRecommendedFrame} />
         </section>
       </main>
+      {libraryOpen && <div className="library-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setLibraryOpen(false) }}>
+        <section className="glasses-library" role="dialog" aria-modal="true" aria-labelledby="library-title">
+          <header><div><span>INTERNAL COLLECTION · 01</span><h2 id="library-title">内部眼镜库</h2><p>选择一副镜框，立即添加到你的试戴画布。</p></div><button aria-label="关闭眼镜库" onClick={() => setLibraryOpen(false)}>×</button></header>
+          <div className="library-grid">
+            {allLibraryGlasses.map((src, index) => {
+              const names = ['轻盈金属圆框', '建筑感黑色方框', '经典学院方圆框', '双层复古眉框', '极简窄方框']
+              const frameName = names[index] || `我的镜框 ${index - DEFAULT_GLASSES.length + 1}`
+              return <article className={glasses === src ? 'active' : ''} key={`${src}-${index}`}>
+                <span>{index < DEFAULT_GLASSES.length ? `NO.0${index + 1}` : 'MY UPLOAD'}</span><img src={src} alt={frameName} /><h3>{frameName}</h3><p>{index < DEFAULT_GLASSES.length ? (index % 2 ? '清晰结构 · 都市表达' : '轻盈线条 · 日常百搭') : '已自动去除图片背景'}</p>
+                <button onClick={() => { setGlasses(src); setGlassesStatus(`眼镜库：${frameName}`); setGenerated(true); setNotice(`已加入「${frameName}」，可继续手动微调`); setLibraryOpen(false) }}>{glasses === src ? '当前试戴' : '添加到试戴'} <span>→</span></button>
+              </article>
+            })}
+          </div>
+        </section>
+      </div>}
       <img ref={imageProbe} src={face} alt="" className="image-probe" crossOrigin="anonymous" />
       <footer>💡 建议：请上传清晰的正脸照片，效果会更好哦！</footer>
     </div>
