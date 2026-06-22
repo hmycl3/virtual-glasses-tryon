@@ -2,6 +2,8 @@
 
 基于 React、Vite、Tailwind CSS 和 MediaPipe Face Landmarker 的虚拟眼镜试戴前端原型。
 
+在线体验：<https://hmycl3.github.io/virtual-glasses-tryon/>
+
 ## 启动
 
 ```bash
@@ -20,6 +22,7 @@ npm run dev
 - `public/`：示例人脸照片与五种透明背景眼镜素材。
 - `tailwind.config.js` / `postcss.config.js`：Tailwind 与 PostCSS 配置。
 - `vite.config.mjs`：Vite 开发服务器与构建配置。
+- `.github/workflows/deploy.yml`：GitHub Pages 自动构建与部署流程。
 - `design-qa.md`：参考图与实现效果的视觉验收记录。
 
 ## 自动定位原理

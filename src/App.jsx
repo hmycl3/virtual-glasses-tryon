@@ -6,8 +6,9 @@ import {
 } from '@phosphor-icons/react'
 import { detectEyeTransform, generateTryOnResult } from './services/faceLandmarker'
 
-const DEFAULT_FACE = '/sample-face.jpg'
-const DEFAULT_GLASSES = ['/glasses-1.png', '/glasses-2.png', '/glasses-3.png', '/glasses-4.png', '/glasses-5.png']
+const asset = (name) => `${import.meta.env.BASE_URL}${name}`
+const DEFAULT_FACE = asset('sample-face.jpg')
+const DEFAULT_GLASSES = [1, 2, 3, 4, 5].map((i) => asset(`glasses-${i}.png`))
 const INITIAL_TRANSFORM = { x: 50, y: 40, width: 43, rotation: 0 }
 
 function readFile(file, setter) {
