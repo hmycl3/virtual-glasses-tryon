@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.npm-cache/
+qa/
+.vite/
+*.log
+.DS_Store
+Thumbs.db
+AGENTS.md
+design-qa.md
