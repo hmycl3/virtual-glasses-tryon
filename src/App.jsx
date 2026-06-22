@@ -6,6 +6,7 @@ import {
 } from '@phosphor-icons/react'
 import { detectEyeTransform, generateTryOnResult } from './services/faceLandmarker'
 import { removeGlassesBackground, validateImageFile } from './services/backgroundRemoval'
+import { FaceAnalysisPanel } from './components/FaceAnalysisPanel'
 
 const asset = (name) => `${import.meta.env.BASE_URL}${name}`
 const DEFAULT_FACE = asset('sample-face.jpg')
@@ -147,6 +148,16 @@ export function App() {
     } finally { setProcessingBackground(false) }
   }
 
+  const tryRecommendedFrame = (frame) => {
+    const selected = DEFAULT_GLASSES[frame.styleIndex]
+    if (!selected) return alert('请上传一张类似风格的眼镜图片进行试戴')
+    setGlasses(selected)
+    setGlassesStatus(`推荐款式：${frame.name}`)
+    setGenerated(true)
+    setNotice(`已切换到「${frame.name}」，可继续手动微调`)
+    setTimeout(() => resultStage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
+  }
+
   useEffect(() => { if (generated) autoFit() }, [face]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const download = async () => {
@@ -220,6 +231,7 @@ export function App() {
               ))}
             </div>
           </div>
+          <FaceAnalysisPanel faceImage={face} onTryFrame={tryRecommendedFrame} />
         </section>
       </main>
       <img ref={imageProbe} src={face} alt="" className="image-probe" crossOrigin="anonymous" />

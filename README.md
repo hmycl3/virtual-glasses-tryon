@@ -18,6 +18,8 @@ npm run dev
 - `src/App.jsx`：页面布局、上传流程、试戴合成、拖动/缩放/旋转、下载等交互。
 - `src/services/faceLandmarker.js`：MediaPipe 人脸关键点检测，以及预留的 `generateTryOnResult(faceImage, glassesImage)` AI 接口。
 - `src/services/backgroundRemoval.js`：浏览器端自动背景识别、边缘连通区域去除与透明 PNG 生成。
+- `src/components/FaceAnalysisPanel.jsx`：AI 脸型分析、推荐卡片与试戴入口组件。
+- `src/utils/faceAnalysis.js`：模拟脸型分析、肯定性描述与镜框推荐逻辑；未来真实 AI 的替换入口。
 - `src/styles.css`：Tailwind 入口和与参考图匹配的组件样式、桌面端布局。
 - `src/main.jsx`：React 应用入口。
 - `public/`：示例人脸照片与五种透明背景眼镜素材。
