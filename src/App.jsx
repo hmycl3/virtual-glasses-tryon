@@ -308,7 +308,7 @@ export function App() {
           <header><div><span>INTERNAL COLLECTION · 01</span><h2 id="library-title">内部眼镜库</h2><p>选择一副镜框，立即添加到你的试戴画布。</p></div><button aria-label="关闭眼镜库" onClick={() => setLibraryOpen(false)}>×</button></header>
           <div className="library-grid">
             {allLibraryGlasses.map((src, index) => {
-              const names = ['轻盈金属圆框', '建筑感黑色方框', '经典学院方圆框', '双层复古眉框', '极简窄方框']
+              const names = ['黑色椭圆框', '复古金属圆框', '无框金色方镜', '暖棕圆框', '琥珀玳瑁椭圆框']
               const frameName = names[index] || `我的镜框 ${index - DEFAULT_GLASSES.length + 1}`
               return <article className={glasses === src ? 'active' : ''} key={`${src}-${index}`}>
                 <span>{index < DEFAULT_GLASSES.length ? `NO.0${index + 1}` : 'MY UPLOAD'}</span><img src={src} alt={frameName} /><h3>{frameName}</h3><p>{index < DEFAULT_GLASSES.length ? (index % 2 ? '清晰结构 · 都市表达' : '轻盈线条 · 日常百搭') : '已自动去除图片背景'}</p>
