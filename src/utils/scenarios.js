@@ -1,0 +1,22 @@
+const frames = (a, b, c) => [a, b, c]
+
+export const scenarios = [
+  { id:'interview', title:'Interview', cn:'面试', icon:'briefcase', group:'WORK', image:'portrait', goal:'Look professional, trustworthy and calm.', strategy:'BALANCE', strategyCn:'保留你的亲和力，同时增加可信度与结构感。', traits:['Professional','Trustworthy','Calm'], frameIndexes:frames(2,1,0) },
+  { id:'corporate-professional', title:'Corporate Professional', cn:'企业职场', icon:'buildings', group:'WORK', goal:'Be precise, composed and dependable.', strategy:'ENHANCE', strategyCn:'强化清晰与可靠，让镜框成为专业表达的一部分。', traits:['Precise','Reliable','Structured'], frameIndexes:frames(2,0,1) },
+  { id:'startup-founder', title:'Startup Founder', cn:'创业者', icon:'rocket', group:'WORK', goal:'Show leadership without losing curiosity.', strategy:'SHIFT', strategyCn:'增加锐度和想象力，让领导感与创造力同时出现。', traits:['Leadership','Creative','Decisive'], frameIndexes:frames(3,2,1) },
+  { id:'presentation-day', title:'Presentation Day', cn:'演讲日', icon:'presentation', group:'WORK', goal:'Hold attention with clarity and confidence.', strategy:'ENHANCE', strategyCn:'放大表达力，用有识别度的轮廓稳定视觉焦点。', traits:['Confident','Clear','Memorable'], frameIndexes:frames(0,2,3) },
+  { id:'first-date', title:'First Date', cn:'初次约会', icon:'heart', group:'SOCIAL', goal:'Feel open, warm and naturally distinctive.', strategy:'BALANCE', strategyCn:'保留真实松弛感，加入一点精致和记忆点。', traits:['Warm','Open','Refined'], frameIndexes:frames(4,1,3) },
+  { id:'coffee-chat', title:'Coffee Chat', cn:'咖啡小聚', icon:'coffee', group:'SOCIAL', goal:'Look approachable, thoughtful and relaxed.', strategy:'ENHANCE', strategyCn:'放大亲近感，用轻盈材质传递从容与好奇。', traits:['Friendly','Thoughtful','Relaxed'], frameIndexes:frames(1,4,0) },
+  { id:'social-gathering', title:'Social Gathering', cn:'社交聚会', icon:'wine', group:'SOCIAL', goal:'Be memorable without trying too hard.', strategy:'SHIFT', strategyCn:'用材质和颜色制造轻巧的社交记忆点。', traits:['Magnetic','Stylish','Easy'], frameIndexes:frames(3,4,1) },
+  { id:'wedding-guest', title:'Wedding Guest', cn:'婚礼宾客', icon:'sparkle', group:'SOCIAL', goal:'Appear polished, celebratory and effortless.', strategy:'BALANCE', strategyCn:'让精致感被看见，但不抢走整体造型的呼吸感。', traits:['Elegant','Polished','Soft'], frameIndexes:frames(1,4,2) },
+  { id:'travel', title:'Travel', cn:'旅行', icon:'airplane', group:'LIFE', goal:'Stay practical while looking editorial.', strategy:'BALANCE', strategyCn:'兼顾长时间佩戴与镜头表现，轻松但不随意。', traits:['Curious','Practical','Editorial'], frameIndexes:frames(4,0,2) },
+  { id:'weekend-casual', title:'Weekend Casual', cn:'周末休闲', icon:'sun', group:'LIFE', goal:'Feel relaxed, personal and unforced.', strategy:'ENHANCE', strategyCn:'把松弛感变成风格，用温暖轮廓维持完整度。', traits:['Relaxed','Natural','Personal'], frameIndexes:frames(4,1,0) },
+  { id:'outdoor-adventure', title:'Outdoor Adventure', cn:'户外徒步', icon:'mountains', group:'LIFE', image:'scenario', goal:'Move freely and look ready for discovery.', strategy:'SHIFT', strategyCn:'提升行动感与轮廓强度，适合阳光和户外镜头。', traits:['Adventurous','Strong','Free'], frameIndexes:frames(0,3,2) },
+  { id:'city-walk', title:'City Walk', cn:'城市漫步', icon:'map', group:'LIFE', goal:'Blend observation, movement and urban polish.', strategy:'BALANCE', strategyCn:'在轻松与都市感之间保持恰好的锐度。', traits:['Observant','Urban','Effortless'], frameIndexes:frames(2,4,0) },
+  { id:'creative-artist', title:'Creative Artist', cn:'创意艺术家', icon:'palette', group:'STYLE', goal:'Make individuality visible at first glance.', strategy:'SHIFT', strategyCn:'选择更有轮廓或材质感的镜框，放大独立表达。', traits:['Individual','Expressive','Unexpected'], frameIndexes:frames(3,0,4) },
+  { id:'vintage-intellectual', title:'Vintage Intellectual', cn:'复古知性', icon:'book', group:'STYLE', goal:'Feel literary, considered and timeless.', strategy:'ENHANCE', strategyCn:'用复古线条强化思考感，同时保持温度。', traits:['Literary','Thoughtful','Timeless'], frameIndexes:frames(3,1,4) },
+  { id:'quiet-luxury', title:'Quiet Luxury', cn:'静奢', icon:'diamond', group:'STYLE', goal:'Signal quality through restraint.', strategy:'ENHANCE', strategyCn:'减少装饰，用比例、材质和细节表达质感。', traits:['Refined','Quiet','Precise'], frameIndexes:frames(1,2,4) },
+  { id:'korean-minimalism', title:'Korean Minimalism', cn:'韩系极简', icon:'circle', group:'STYLE', goal:'Look clean, light and softly structured.', strategy:'BALANCE', strategyCn:'以轻盈镜框平衡面部线条，保留干净留白。', traits:['Clean','Soft','Modern'], frameIndexes:frames(1,0,2) },
+]
+
+export const getScenario = (id) => scenarios.find((item) => item.id === id) || scenarios[0]

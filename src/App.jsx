@@ -1,325 +1,81 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  ArrowClockwise, ArrowsOutCardinal, CaretDown, CheckCircle,
-  DownloadSimple, Eyeglasses, Globe, Info, MagicWand, Minus,
-  Plus, UploadSimple,
+  ArrowClockwise, ArrowRight, ArrowsOutCardinal, CaretDown, CheckCircle, DownloadSimple,
+  Eyeglasses, Globe, House, Info, MagicWand, Minus, Plus, UploadSimple, X,
 } from '@phosphor-icons/react'
 import { detectEyeTransform, generateTryOnResult } from './services/faceLandmarker'
 import { removeGlassesBackground, validateImageFile } from './services/backgroundRemoval'
 import { FaceAnalysisPanel } from './components/FaceAnalysisPanel'
 import { IdentityTest } from './components/IdentityTest'
 import { IdentityResult } from './components/IdentityResult'
+import { LandingPage } from './components/LandingPage'
+import { ScenarioHub } from './components/ScenarioHub'
+import { ScenarioDetail } from './components/ScenarioDetail'
+import { VersionsModal } from './components/VersionsModal'
 import { generateVisualIdentity } from './utils/visualIdentity'
+import { frameProfiles } from './utils/frameProfiles'
+import { getScenario } from './utils/scenarios'
 
-const asset = (name) => `${import.meta.env.BASE_URL}${name}`
-const DEFAULT_FACE = asset('sample-face.jpg')
-const DEFAULT_GLASSES = [1, 2, 3, 4, 5].map((i) => asset(`glasses-${i}.png`))
-const INITIAL_TRANSFORM = { x: 50, y: 40, width: 43, rotation: 0 }
-const BASE_PATH = import.meta.env.BASE_URL
-const getRoute = () => window.location.pathname.replace(BASE_PATH, '').replace(/^\//, '')
+const asset=(name)=>`${import.meta.env.BASE_URL}${name}`
+const DEFAULT_FACE=asset('sample-face.jpg')
+const DEFAULT_GLASSES=[1,2,3,4,5].map(i=>asset(`glasses-${i}.png`))
+const INITIAL_TRANSFORM={x:50,y:38,width:43,rotation:0}
+const BASE_PATH=import.meta.env.BASE_URL
+const getRoute=()=>window.location.pathname.replace(BASE_PATH,'').replace(/^\//,'')
 
-function UploadBox({ step, title, hint, image, onUpload, compactLabel, statusText, disabled = false }) {
-  const id = `upload-${step}`
-  return (
-    <section className="step-card">
-      <div className="step-title"><span>{step}</span>{title}<Info size={15} weight="bold" /></div>
-      <label className={`dropzone ${disabled ? 'processing' : ''}`} htmlFor={id}>
-        <UploadSimple size={34} weight="regular" />
-        <strong>点击上传{compactLabel}</strong>
-        <small>{hint}</small>
-      </label>
-      <input id={id} hidden disabled={disabled} type="file" accept="image/jpeg,image/png" onChange={(e) => onUpload(e.target.files[0])} />
-      <div className="upload-status">
-        <img src={image} alt="已上传缩略图" />
-        <span>{statusText || (image === DEFAULT_FACE ? '示例照片' : '已上传')}</span>
-        <label htmlFor={id}><ArrowClockwise size={15} /> 更换{step === 1 ? '照片' : '眼镜'}</label>
-      </div>
-    </section>
-  )
+function ResultStage({ face,glasses,transform,setTransform,editable=false,stageRef }) {
+  const drag=useRef(null); const pointers=useRef(new Map()); const gesture=useRef(null)
+  const points=()=>[...pointers.current.values()]; const distance=(a,b)=>Math.hypot(b.x-a.x,b.y-a.y); const angle=(a,b)=>Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI
+  const down=(e)=>{if(!editable)return;e.currentTarget.setPointerCapture(e.pointerId);pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.current.size===1)drag.current={sx:e.clientX,sy:e.clientY,x:transform.x,y:transform.y};else{const[a,b]=points();drag.current=null;gesture.current={distance:distance(a,b),angle:angle(a,b),width:transform.width,rotation:transform.rotation}}}
+  const move=(e)=>{if(!pointers.current.has(e.pointerId)||!stageRef.current)return;pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.current.size===2&&gesture.current){const[a,b]=points();setTransform(t=>({...t,width:Math.max(15,Math.min(90,gesture.current.width*distance(a,b)/Math.max(1,gesture.current.distance))),rotation:gesture.current.rotation+angle(a,b)-gesture.current.angle}));return}if(!drag.current)return;const rect=stageRef.current.getBoundingClientRect();setTransform(t=>({...t,x:Math.max(0,Math.min(100,drag.current.x+(e.clientX-drag.current.sx)/rect.width*100)),y:Math.max(0,Math.min(100,drag.current.y+(e.clientY-drag.current.sy)/rect.height*100))}))}
+  const end=(e)=>{pointers.current.delete(e.pointerId);gesture.current=null;const p=points()[0];drag.current=p?{sx:p.x,sy:p.y,x:transform.x,y:transform.y}:null}
+  return <div className="photo-stage" ref={stageRef}><img className="face-image" src={face} alt={editable?'试戴效果':'原始照片'}/>{editable&&<img className="glasses-overlay" src={glasses} alt="叠加眼镜" onPointerDown={down} onPointerMove={move} onPointerUp={end} onPointerCancel={end} style={{left:`${transform.x}%`,top:`${transform.y}%`,width:`${transform.width}%`,transform:`translate(-50%,-50%) rotate(${transform.rotation}deg)`}}/>}</div>
 }
 
-function ResultStage({ face, glasses, transform, setTransform, editable = false, stageRef }) {
-  const drag = useRef(null)
-  const pointers = useRef(new Map())
-  const gesture = useRef(null)
-  const pointerPair = () => [...pointers.current.values()]
-  const distance = (a, b) => Math.hypot(b.x - a.x, b.y - a.y)
-  const angle = (a, b) => Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI
-  const onPointerDown = (e) => {
-    if (!editable) return
-    e.currentTarget.setPointerCapture(e.pointerId)
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    if (pointers.current.size === 1) {
-      drag.current = { sx: e.clientX, sy: e.clientY, x: transform.x, y: transform.y }
-    } else if (pointers.current.size === 2) {
-      const [a, b] = pointerPair()
-      drag.current = null
-      gesture.current = { distance: distance(a, b), angle: angle(a, b), width: transform.width, rotation: transform.rotation }
-    }
-  }
-  const onPointerMove = (e) => {
-    if (!pointers.current.has(e.pointerId) || !stageRef.current) return
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    if (pointers.current.size === 2 && gesture.current) {
-      const [a, b] = pointerPair()
-      const scale = distance(a, b) / Math.max(1, gesture.current.distance)
-      const rotationDelta = angle(a, b) - gesture.current.angle
-      setTransform((t) => ({ ...t,
-        width: Math.max(15, Math.min(90, gesture.current.width * scale)),
-        rotation: gesture.current.rotation + rotationDelta,
-      }))
-      return
-    }
-    if (!drag.current) return
-    const rect = stageRef.current.getBoundingClientRect()
-    setTransform((t) => ({ ...t,
-      x: Math.max(0, Math.min(100, drag.current.x + ((e.clientX - drag.current.sx) / rect.width) * 100)),
-      y: Math.max(0, Math.min(100, drag.current.y + ((e.clientY - drag.current.sy) / rect.height) * 100)),
-    }))
-  }
-  const onPointerEnd = (e) => {
-    pointers.current.delete(e.pointerId)
-    gesture.current = null
-    const remaining = pointerPair()[0]
-    drag.current = remaining ? { sx: remaining.x, sy: remaining.y, x: transform.x, y: transform.y } : null
-  }
-  return (
-    <div className="photo-stage" ref={stageRef}>
-      <img className="face-image" src={face} alt={editable ? '试戴效果' : '原始照片'} />
-      {editable && <img
-        className="glasses-overlay" src={glasses} alt="叠加眼镜"
-        onPointerDown={onPointerDown} onPointerMove={onPointerMove}
-        onPointerUp={onPointerEnd} onPointerCancel={onPointerEnd}
-        style={{ left: `${transform.x}%`, top: `${transform.y}%`, width: `${transform.width}%`, transform: `translate(-50%, -50%) rotate(${transform.rotation}deg)` }}
-      />}
-    </div>
-  )
+function SiteHeader({ route,onNavigate }) {
+  const isLanding=!route
+  return <header className={`site-header ${isLanding?'landing-header':''}`}><button className="brand" onClick={()=>onNavigate('')}><Eyeglasses size={34}/><strong>Virtual Glasses Try-On</strong></button><nav>{isLanding?<><button onClick={()=>document.querySelector('#explore')?.scrollIntoView({behavior:'smooth'})}>Explore</button><button onClick={()=>document.querySelector('#about')?.scrollIntoView({behavior:'smooth'})}>About</button></>:<><button onClick={()=>onNavigate('')}><House/>Home</button><button className={route==='try-on'?'active':''} onClick={()=>onNavigate('try-on')}>Try On</button><button className={route.startsWith('scenario')?'active':''} onClick={()=>onNavigate('scenario')}>Scenario</button><button className={route.startsWith('identity')?'active':''} onClick={()=>onNavigate('identity-test')}>Identity</button></>}</nav><button className="language"><Globe/>简体中文<CaretDown/></button></header>
 }
 
-export function App() {
-  const [face, setFace] = useState(DEFAULT_FACE)
-  const [glasses, setGlasses] = useState(DEFAULT_GLASSES[0])
-  const [transform, setTransform] = useState(INITIAL_TRANSFORM)
-  const [generated, setGenerated] = useState(true)
-  const [detecting, setDetecting] = useState(false)
-  const [processingBackground, setProcessingBackground] = useState(false)
-  const [uploadedGlasses, setUploadedGlasses] = useState([])
-  const [glassesStatus, setGlassesStatus] = useState('默认透明素材')
-  const [notice, setNotice] = useState('单指拖动，双指缩放和旋转')
-  const [route, setRoute] = useState(getRoute)
-  const [identityResult, setIdentityResult] = useState(() => { try { return JSON.parse(sessionStorage.getItem('visualIdentity')) } catch { return null } })
-  const [identityApplied, setIdentityApplied] = useState(null)
-  const [libraryOpen, setLibraryOpen] = useState(false)
-  const imageProbe = useRef(null)
-  const leftStage = useRef(null)
-  const resultStage = useRef(null)
-  const navigate = useCallback((next = '') => { window.history.pushState({}, '', `${BASE_PATH}${next}`); setRoute(next) }, [])
-  useEffect(() => { const handler=()=>setRoute(getRoute()); window.addEventListener('popstate',handler); return()=>window.removeEventListener('popstate',handler) }, [])
+export function App(){
+  const[route,setRoute]=useState(getRoute);const[face,setFace]=useState(DEFAULT_FACE);const[glasses,setGlasses]=useState(DEFAULT_GLASSES[0]);const[transform,setTransform]=useState(INITIAL_TRANSFORM);const[generated,setGenerated]=useState(true);const[detecting,setDetecting]=useState(false);const[processing,setProcessing]=useState(false);const[uploadedGlasses,setUploadedGlasses]=useState([]);const[notice,setNotice]=useState('已根据双眼关键点自动对齐');const[glassesStatus,setGlassesStatus]=useState('内置透明镜框');const[libraryOpen,setLibraryOpen]=useState(false);const[versionsOpen,setVersionsOpen]=useState(false);const[identityResult,setIdentityResult]=useState(()=>{try{return JSON.parse(sessionStorage.getItem('visualIdentity'))}catch{return null}})
+  const imageProbe=useRef(null);const stageRef=useRef(null)
+  const navigate=useCallback((next='')=>{window.history.pushState({},'',`${BASE_PATH}${next}`);setRoute(next);window.scrollTo({top:0,behavior:'smooth'})},[])
+  useEffect(()=>{const h=()=>setRoute(getRoute());window.addEventListener('popstate',h);return()=>window.removeEventListener('popstate',h)},[])
 
-  const autoFit = useCallback(async () => {
-    setDetecting(true)
-    setNotice('正在识别人脸关键点…')
-    try {
-      const img = imageProbe.current
-      if (!img.complete) await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject })
-      const fitted = await detectEyeTransform(img, leftStage.current)
-      setTransform(fitted)
-      setNotice('已根据双眼关键点自动对齐')
-    } catch (error) {
-      setTransform(INITIAL_TRANSFORM)
-      setNotice(`${error.message || '人脸检测暂不可用'}，已使用默认位置`)
-    } finally { setDetecting(false) }
-  }, [])
+  const autoFit=useCallback(async()=>{setDetecting(true);setNotice('正在识别人脸关键点……');try{const img=imageProbe.current;if(!img.complete)await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject});setTransform(await detectEyeTransform(img,stageRef.current));setNotice('已根据双眼关键点自动对齐')}catch(error){setTransform(INITIAL_TRANSFORM);setNotice(`${error.message||'暂未识别到双眼'}，可手动微调`)}finally{setDetecting(false)}},[])
+  const generate=async()=>{setGenerated(false);await generateTryOnResult(face,glasses);setGenerated(true);setTimeout(autoFit,30)}
+  const uploadFace=(file)=>{try{if(validateImageFile(file)){setFace(URL.createObjectURL(file));setGenerated(true);setTimeout(autoFit,60)}}catch(e){alert(e.message)}}
+  const addGlassesFiles=async(files)=>{const selected=Array.from(files||[]);if(!selected.length)return;setProcessing(true);const completed=[];for(let i=0;i<selected.length;i+=1){setGlassesStatus(`正在透明化 ${i+1} / ${selected.length}`);try{validateImageFile(selected[i]);completed.push(await removeGlassesBackground(selected[i]))}catch(error){console.warn(error)}}if(completed.length){setUploadedGlasses(v=>[...v,...completed]);setGlasses(completed[0]);setGlassesStatus(`已添加 ${completed.length} 副镜框并自动去除背景`);setGenerated(true)}else alert('没有可处理的 JPG / PNG 图片');setProcessing(false)}
+  const selectFrame=(index,source=DEFAULT_GLASSES)=>{setGlasses(source[index]);setGlassesStatus(frameProfiles[index]?.name||'上传镜框');setGenerated(true);setLibraryOpen(false);setTimeout(autoFit,40)}
+  const tryRecommendedFrame=(frame)=>{selectFrame(frame.styleIndex);document.querySelector('.tryon-canvas')?.scrollIntoView({behavior:'smooth'})}
+  const trySceneFrame=(index,scenario)=>{selectFrame(index);setNotice(`${scenario.cn}场景建议已应用，可继续手动调整`);navigate('try-on')}
+  const completeIdentity=(answers)=>{const result=generateVisualIdentity(answers);setIdentityResult(result);sessionStorage.setItem('visualIdentity',JSON.stringify(result));navigate('identity-result')}
+  const applyIdentity=(result,frame=result.recommendations[0])=>{selectFrame(frame.styleIndex);setNotice(`${result.primary} 风格建议已应用`);navigate('try-on')}
 
-  const generate = async () => {
-    setGenerated(false)
-    await generateTryOnResult(face, glasses)
-    await autoFit()
-    setGenerated(true)
-  }
+  const download=async()=>{const faceImg=imageProbe.current;const frameImg=new Image();frameImg.crossOrigin='anonymous';frameImg.src=glasses;await frameImg.decode();const canvas=document.createElement('canvas');canvas.width=faceImg.naturalWidth;canvas.height=faceImg.naturalHeight;const ctx=canvas.getContext('2d');ctx.drawImage(faceImg,0,0);const w=canvas.width*transform.width/100;const ratio=frameImg.naturalHeight/frameImg.naturalWidth;ctx.save();ctx.translate(canvas.width*transform.x/100,canvas.height*transform.y/100);ctx.rotate(transform.rotation*Math.PI/180);ctx.drawImage(frameImg,-w/2,-w*ratio/2,w,w*ratio);ctx.restore();const a=document.createElement('a');a.download='my-virtual-try-on.png';a.href=canvas.toDataURL('image/png');a.click()}
 
-  const uploadFace = (file) => {
-    try { if (validateImageFile(file)) setFace(URL.createObjectURL(file)) }
-    catch (error) { alert(error.message) }
-  }
+  useEffect(()=>{if(route==='try-on'&&generated){const timer=setTimeout(autoFit,120);return()=>clearTimeout(timer)}},[route,face,generated,autoFit])
 
-  const uploadGlasses = async (file) => {
-    if (!file) return
-    setProcessingBackground(true)
-    setGlassesStatus('正在自动去除背景…')
-    try {
-      const transparentImage = await removeGlassesBackground(file)
-      setGlasses(transparentImage)
-      setGlassesStatus('已自动去除背景')
-      setGenerated(true)
-      setNotice('背景已透明化，可单指拖动、双指缩放')
-    } catch (error) {
-      try { validateImageFile(file); setGlasses(URL.createObjectURL(file)); setGlassesStatus('背景处理失败，已使用原图') }
-      catch { setGlassesStatus('请选择 JPG / PNG 图片') }
-      alert(error.message)
-    } finally { setProcessingBackground(false) }
-  }
+  const header=<SiteHeader route={route} onNavigate={navigate}/>
+  if(!route)return <div className="app-shell">{header}<LandingPage onNavigate={navigate}/></div>
+  if(route==='scenario')return <div className="app-shell">{header}<ScenarioHub onNavigate={navigate}/></div>
+  if(route.startsWith('scenario/'))return <div className="app-shell">{header}<ScenarioDetail scenario={getScenario(route.split('/')[1])} onBack={()=>navigate('scenario')} onTryFrame={trySceneFrame}/></div>
+  if(route==='identity-test')return <div className="app-shell">{header}<IdentityTest faceImage={face} onUploadFace={uploadFace} onBack={()=>navigate('')} onComplete={completeIdentity}/></div>
+  if(route==='identity-result')return <div className="app-shell">{header}<IdentityResult result={identityResult||generateVisualIdentity([0,0,0,0,0])} faceImage={face} onBack={()=>navigate('identity-test')} onApply={applyIdentity}/></div>
 
-  const tryRecommendedFrame = (frame) => {
-    const selected = DEFAULT_GLASSES[frame.styleIndex]
-    if (!selected) return alert('请上传一张类似风格的眼镜图片进行试戴')
-    setGlasses(selected)
-    setGlassesStatus(`推荐款式：${frame.name}`)
-    setGenerated(true)
-    setNotice(`已切换到「${frame.name}」，可继续手动微调`)
-    setTimeout(() => resultStage.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
-  }
-
-  const uploadMultipleGlasses = async (files) => {
-    const selectedFiles = Array.from(files || [])
-    if (!selectedFiles.length) return
-    setProcessingBackground(true)
-    setGlassesStatus(`正在处理 0 / ${selectedFiles.length} 张图片…`)
-    const completed = []
-    for (let index = 0; index < selectedFiles.length; index += 1) {
-      try {
-        validateImageFile(selectedFiles[index])
-        completed.push(await removeGlassesBackground(selectedFiles[index]))
-        setGlassesStatus(`正在处理 ${index + 1} / ${selectedFiles.length} 张图片…`)
-      } catch (error) {
-        console.warn(`跳过无法处理的图片：${selectedFiles[index].name}`, error)
-      }
-    }
-    if (completed.length) {
-      setUploadedGlasses(current => [...current, ...completed])
-      setGlasses(completed[0])
-      setGenerated(true)
-      setGlassesStatus(`已添加 ${completed.length} 副眼镜并自动去除背景`)
-      setNotice('新眼镜已加入内部眼镜库，可拖动、缩放和旋转')
-    } else {
-      setGlassesStatus('未能添加图片，请选择清晰的 JPG / PNG')
-      alert('所选图片未能完成处理，请换一组 JPG / PNG 图片重试')
-    }
-    setProcessingBackground(false)
-  }
-
-  const completeIdentityTest = (answers) => {
-    const result = generateVisualIdentity(answers)
-    setIdentityResult(result); sessionStorage.setItem('visualIdentity', JSON.stringify(result)); navigate('identity-result')
-  }
-
-  const applyIdentityToTryOn = (result) => {
-    const first = result.recommendations[0]
-    setIdentityApplied(result); setGlasses(DEFAULT_GLASSES[first.styleIndex]); setGlassesStatus(`视觉身份推荐：${first.name}`)
-    setGenerated(true); setNotice(`${result.strategy} 策略已应用，推荐顺序与匹配度已更新`); navigate('')
-  }
-
-  useEffect(() => { if (generated) autoFit() }, [face]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const download = async () => {
-    const faceImg = imageProbe.current
-    const glassesImg = new Image(); glassesImg.src = glasses
-    await glassesImg.decode()
-    const canvas = document.createElement('canvas')
-    canvas.width = faceImg.naturalWidth; canvas.height = faceImg.naturalHeight
-    const ctx = canvas.getContext('2d'); ctx.drawImage(faceImg, 0, 0)
-    const w = canvas.width * transform.width / 100
-    const ratio = glassesImg.naturalHeight / glassesImg.naturalWidth
-    ctx.save(); ctx.translate(canvas.width * transform.x / 100, canvas.height * transform.y / 100)
-    ctx.rotate(transform.rotation * Math.PI / 180)
-    ctx.drawImage(glassesImg, -w / 2, -(w * ratio) / 2, w, w * ratio); ctx.restore()
-    const a = document.createElement('a'); a.download = 'virtual-glasses-try-on.png'; a.href = canvas.toDataURL('image/png'); a.click()
-  }
-
-  const appHeader = <header className="topbar">
-    <button className="brand" onClick={() => navigate('')}><Eyeglasses size={35} weight="regular" /><strong>Virtual Glasses Try-On</strong></button>
-    <nav className="flow-nav"><button className={!route ? 'active' : ''} onClick={() => navigate('')}>Quick Try-On</button><button className={route.startsWith('identity') ? 'active' : ''} onClick={() => navigate('identity-test')}>Visual Identity</button></nav>
-    <button className="language"><Globe size={19} /> 简体中文 <CaretDown size={14} /></button>
-  </header>
-
-  if (route === 'identity-test') return <div className="app-shell editorial-shell">{appHeader}<IdentityTest faceImage={face} onBack={() => navigate('')} onComplete={completeIdentityTest}/></div>
-  if (route === 'identity-result') return <div className="app-shell editorial-shell">{appHeader}<IdentityResult result={identityResult || generateVisualIdentity([0,0,0,0,0])} faceImage={face} onBack={() => navigate('identity-test')} onApply={applyIdentityToTryOn}/></div>
-
-  const allLibraryGlasses = [...DEFAULT_GLASSES, ...uploadedGlasses]
-  const rankedGlasses = identityApplied ? [...identityApplied.recommendations.map(r => DEFAULT_GLASSES[r.styleIndex]), ...allLibraryGlasses].filter((v,i,a)=>a.indexOf(v)===i) : allLibraryGlasses
-
-  return (
-    <div className="app-shell">
-      {appHeader}
-
-      <main className="workspace">
-        <aside className="sidebar panel">
-          <div className="editorial-kicker"><strong>VIRTUAL<br/><i>TRY-ON</i></strong><span>试戴，从此更简单</span><small>No.06</small></div>
-          <div className="sidebar-heading"><h1>虚拟眼镜试戴</h1><p>上传照片和眼镜，看看适合你的效果</p></div>
-          <UploadBox step={1} title="上传正脸照片" compactLabel="正脸照片" hint="支持 JPG / PNG，文件不超过 10MB" image={face} onUpload={uploadFace} />
-          <section className="step-card library-step">
-            <div className="step-title"><span>2</span>选择眼镜<Info size={15} weight="bold" /></div>
-            <button className="library-entry" onClick={() => setLibraryOpen(true)}>
-              <Eyeglasses size={32} /><span><strong>打开眼镜库</strong><small>从内置镜框中选择并加入试戴</small></span><b>→</b>
-            </button>
-            <div className="upload-status"><img src={glasses} alt="当前眼镜" /><span>{glassesStatus}</span></div>
-          </section>
-          <section className="step-card generate-card">
-            <div className="step-title"><span>3</span>生成效果</div>
-            <button className="primary" onClick={generate} disabled={detecting}><MagicWand size={18} weight="fill" />{detecting ? '识别人脸中…' : '生成试戴效果'}</button>
-          </section>
-          <button className="identity-entry" onClick={() => navigate('identity-test')}>Discover Your Visual Identity <span>→</span></button>
-        </aside>
-
-        <section className="content-area">
-          <div className="result-panel panel">
-            <div className="section-head">
-              <div><h2>试戴效果</h2><p className="detect-status"><CheckCircle size={14} weight="fill" /> {notice}</p></div>
-              <div className="actions">
-                <button onClick={download}><DownloadSimple size={18} />下载图片</button>
-                <button className="dark" onClick={generate}><ArrowClockwise size={18} />重新生成</button>
-              </div>
-            </div>
-            <div className="comparison">
-              <div className="photo-wrap"><span className="image-label">原图</span><ResultStage face={face} stageRef={leftStage} /></div>
-              <div className="photo-wrap"><span className="image-label">试戴效果</span>{generated && <ResultStage face={face} glasses={glasses} transform={transform} setTransform={setTransform} editable stageRef={resultStage} />}</div>
-            </div>
-            <div className="adjust-bar" aria-label="眼镜调整工具">
-              <span><ArrowsOutCardinal size={16} />单指拖动 · 双指缩放</span>
-              <button title="缩小" onClick={() => setTransform(t => ({...t, width: Math.max(15, t.width - 3)}))}><Minus /></button>
-              <span>{Math.round(transform.width)}%</span>
-              <button title="放大" onClick={() => setTransform(t => ({...t, width: Math.min(90, t.width + 3)}))}><Plus /></button>
-              <button title="逆时针旋转" onClick={() => setTransform(t => ({...t, rotation: t.rotation - 3}))}><ArrowClockwise className="flip" /></button>
-              <span>{Math.round(transform.rotation)}°</span>
-              <button title="顺时针旋转" onClick={() => setTransform(t => ({...t, rotation: t.rotation + 3}))}><ArrowClockwise /></button>
-              <button className="auto-fit" onClick={autoFit}>自动对齐双眼</button>
-            </div>
-          </div>
-
-          <div className="styles-panel panel">
-            <div className="styles-heading"><h2>眼镜样式选择</h2><button onClick={() => setLibraryOpen(true)}>进入眼镜库 <span>→</span></button></div>
-            <div className="styles-row">
-              <label className={`upload-style ${processingBackground ? 'processing' : ''}`} htmlFor="style-upload"><Plus size={28} /><span>{processingBackground ? '正在透明化…' : '批量上传眼镜'}</span><small>可同时选择多张</small></label>
-              <input id="style-upload" hidden multiple disabled={processingBackground} type="file" accept="image/jpeg,image/png" onChange={(e) => { uploadMultipleGlasses(e.target.files); e.target.value = '' }} />
-              {rankedGlasses.map((src, i) => (
-                <button className={`style-card ${glasses === src ? 'selected' : ''}`} key={src} onClick={() => { setGlasses(src); setGlassesStatus('默认透明素材'); setGenerated(true) }}>
-                  <img src={src} alt={`默认眼镜样式 ${i + 1}`} />
-                  {glasses === src && <CheckCircle size={22} weight="fill" />}
-                  {identityApplied && identityApplied.recommendations.find(r=>DEFAULT_GLASSES[r.styleIndex]===src) && <em className="identity-score">{identityApplied.recommendations.find(r=>DEFAULT_GLASSES[r.styleIndex]===src).identityScore}%</em>}
-                </button>
-              ))}
-            </div>
-          </div>
-          <FaceAnalysisPanel faceImage={face} onTryFrame={tryRecommendedFrame} />
-        </section>
-      </main>
-      {libraryOpen && <div className="library-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setLibraryOpen(false) }}>
-        <section className="glasses-library" role="dialog" aria-modal="true" aria-labelledby="library-title">
-          <header><div><span>INTERNAL COLLECTION · 01</span><h2 id="library-title">内部眼镜库</h2><p>选择一副镜框，立即添加到你的试戴画布。</p></div><button aria-label="关闭眼镜库" onClick={() => setLibraryOpen(false)}>×</button></header>
-          <div className="library-grid">
-            {allLibraryGlasses.map((src, index) => {
-              const names = ['黑色椭圆框', '复古金属圆框', '无框金色方镜', '暖棕圆框', '琥珀玳瑁椭圆框']
-              const frameName = names[index] || `我的镜框 ${index - DEFAULT_GLASSES.length + 1}`
-              return <article className={glasses === src ? 'active' : ''} key={`${src}-${index}`}>
-                <span>{index < DEFAULT_GLASSES.length ? `NO.0${index + 1}` : 'MY UPLOAD'}</span><img src={src} alt={frameName} /><h3>{frameName}</h3><p>{index < DEFAULT_GLASSES.length ? (index % 2 ? '清晰结构 · 都市表达' : '轻盈线条 · 日常百搭') : '已自动去除图片背景'}</p>
-                <button onClick={() => { setGlasses(src); setGlassesStatus(`眼镜库：${frameName}`); setGenerated(true); setNotice(`已加入「${frameName}」，可继续手动微调`); setLibraryOpen(false) }}>{glasses === src ? '当前试戴' : '添加到试戴'} <span>→</span></button>
-              </article>
-            })}
-          </div>
-        </section>
-      </div>}
-      <img ref={imageProbe} src={face} alt="" className="image-probe" crossOrigin="anonymous" />
-      <footer>💡 建议：请上传清晰的正脸照片，效果会更好哦！</footer>
+  const allFrames=[...DEFAULT_GLASSES,...uploadedGlasses]
+  return <div className="app-shell">{header}<main className="tryon-page">
+    <section className="tryon-title"><div><span className="issue-label wine">VIRTUAL TRY-ON · 01</span><h1>Try a different<br/><em>version of you.</em></h1></div><p>上传一张正脸照，选择镜框。系统会自动识别双眼位置，你仍可以拖动、双指缩放和旋转。</p></section>
+    <div className="tryon-workspace">
+      <aside className="tryon-controls"><span>01 · YOUR PHOTO</span><h2>上传正脸照片</h2><label className="try-upload"><UploadSimple size={30}/><b>点击上传照片</b><small>JPG / PNG，建议正面清晰照片</small><input hidden type="file" accept="image/jpeg,image/png" onChange={e=>uploadFace(e.target.files[0])}/></label><div className="uploaded-face"><img src={face}/><span>当前照片<small>点击上方即可更换</small></span></div><hr/><span>02 · GENERATE</span><button className="wine-button" onClick={generate} disabled={detecting}><MagicWand weight="fill"/>{detecting?'识别人脸中……':'生成试戴效果'}</button><button className="outline-button" onClick={()=>navigate('scenario')}>先选择使用场景<ArrowRight/></button></aside>
+      <section className="tryon-canvas"><header><div><h2>试戴效果</h2><p><CheckCircle weight="fill"/>{notice}</p></div><div><button onClick={download}><DownloadSimple/>下载</button><button onClick={generate}><ArrowClockwise/>重新生成</button></div></header><div className="canvas-main"><ResultStage face={face} glasses={glasses} transform={transform} setTransform={setTransform} editable={generated} stageRef={stageRef}/><span className="canvas-label">LIVE TRY-ON</span><div className="original-thumb"><ResultStage face={face}/><span>原图</span></div></div><div className="adjust-bar"><span><ArrowsOutCardinal/>拖动 · 双指缩放</span><button onClick={()=>setTransform(t=>({...t,width:Math.max(15,t.width-3)}))}><Minus/></button><b>{Math.round(transform.width)}%</b><button onClick={()=>setTransform(t=>({...t,width:Math.min(90,t.width+3)}))}><Plus/></button><button onClick={()=>setTransform(t=>({...t,rotation:t.rotation-3}))}><ArrowClockwise className="flip"/></button><b>{Math.round(transform.rotation)}°</b><button onClick={()=>setTransform(t=>({...t,rotation:t.rotation+3}))}><ArrowClockwise/></button><button onClick={autoFit}>自动对齐</button></div><button className="versions-trigger" onClick={()=>setVersionsOpen(true)}>Explore Different Versions of Me <ArrowRight/></button></section>
+      <aside className="frame-rail"><header><span>03 · FRAME LIBRARY</span><h2>选择镜框</h2><button onClick={()=>setLibraryOpen(true)}>View all</button></header><div>{allFrames.map((src,index)=>{const profile=frameProfiles[index%5];return <button className={glasses===src?'selected':''} key={`${src}-${index}`} onClick={()=>{setGlasses(src);setGlassesStatus(profile.name);setTimeout(autoFit,20)}}><img src={src} alt={profile.name}/><span><b>{profile.name}</b><small>Perception Effect</small><i>{profile.perception.join(' · ')}</i></span></button>})}</div><label className="add-frames"><Plus/>添加多张眼镜图片<input hidden multiple type="file" accept="image/jpeg,image/png" onChange={e=>addGlassesFiles(e.target.files)}/></label><p><Info/>上传后会自动去除纯色或浅色背景</p></aside>
     </div>
-  )
+    <FaceAnalysisPanel faceImage={face} onTryFrame={tryRecommendedFrame}/>
+  </main>
+  {libraryOpen&&<div className="modal-backdrop"><section className="frame-library-modal"><header><div><span>CURATED FRAME LIBRARY</span><h2>选择你的表达方式</h2><p>{glassesStatus}</p></div><button onClick={()=>setLibraryOpen(false)}><X/></button></header><div>{allFrames.map((src,index)=>{const p=frameProfiles[index%5];return <article key={`${src}-modal`}><span>0{index+1}</span><img src={src}/><h3>{p.name}</h3><p>{p.note}</p><div>{p.perception.map(x=><i key={x}>{x}</i>)}</div><button onClick={()=>{setGlasses(src);setLibraryOpen(false);setTimeout(autoFit,20)}}>Try This Frame<ArrowRight/></button></article>})}</div><label className="library-upload"><UploadSimple/>{processing?'正在处理背景……':'上传多张眼镜并自动透明化'}<input hidden multiple type="file" accept="image/jpeg,image/png" onChange={e=>addGlassesFiles(e.target.files)}/></label></section></div>}
+  {versionsOpen&&<VersionsModal frameName={glassesStatus} onClose={()=>setVersionsOpen(false)} onExplore={(scene)=>{setVersionsOpen(false);navigate(`scenario/${scene}`)}}/>}
+  <img ref={imageProbe} className="image-probe" src={face} alt=""/>
+  </div>
 }
