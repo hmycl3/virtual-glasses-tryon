@@ -33,15 +33,15 @@ export function LandingPage({ onNavigate }) {
       <div className="experience-grid">
         <article className="experience-card try-card" onClick={() => onNavigate('try-on')}>
           <div className="experience-image"><img src={asset('tryon-entry.jpg')} alt="虚拟眼镜试戴正面照"/><span>01</span></div>
-          <div className="experience-copy"><Eye size={22}/><span>TRY ON</span><h3>Try Before<br/>You Decide</h3><p>Upload your photo and explore different frames instantly.</p><button>Enter Try-On <ArrowRight/></button></div>
+          <div className="experience-copy"><Eye size={22}/><span>TRY ON</span><h3>Try Before<br/>You Decide</h3><p>Upload your photo and explore different frames instantly.</p><button aria-label="Enter Try-On"/></div>
         </article>
         <article className="experience-card scenario-card" onClick={() => onNavigate('scenario')}>
           <div className="experience-image"><img src={asset('scenario-diptych.png')} onError={(e)=>{e.currentTarget.src=asset('hero-portrait.png')}} alt="不同场景下的视觉风格"/><span>02</span></div>
-          <div className="experience-copy"><Sparkle size={22}/><span>SCENARIO</span><h3>Who Do You Want<br/>To Be Today?</h3><p>Different moments call for different versions of you.</p><button>Choose Your Moment <ArrowRight/></button></div>
+          <div className="experience-copy"><Sparkle size={22}/><span>SCENARIO</span><h3>Who Do You Want<br/>To Be Today?</h3><p>Different moments call for different versions of you.</p><button aria-label="Choose Your Moment"/></div>
         </article>
         <article className="experience-card identity-card" onClick={() => onNavigate('identity-test')}>
           <div className="identity-art"><img src={asset('identity-portrait.png')} alt="视觉身份侧脸肖像"/><div><b>The Quiet<br/>Strategist</b><small>CALM · THOUGHTFUL · RELIABLE</small></div><span>03</span></div>
-          <div className="experience-copy"><Fingerprint size={22}/><span>IDENTITY</span><h3>Discover Your<br/>Visual Identity</h3><p>Understand how you are seen, and how you want to be seen.</p><button>Begin Discovery <ArrowRight/></button></div>
+          <div className="experience-copy"><Fingerprint size={22}/><span>IDENTITY</span><h3>Discover Your<br/>Visual Identity</h3><p>Understand how you are seen, and how you want to be seen.</p><button aria-label="Begin Discovery"/></div>
         </article>
       </div>
     </section>
