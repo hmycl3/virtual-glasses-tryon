@@ -33,11 +33,11 @@ export async function detectEyeTransform(imageEl, stageEl) {
   const rect = stageEl?.getBoundingClientRect()
   const stageWidth = rect?.width || imageEl.naturalWidth
   const stageHeight = rect?.height || imageEl.naturalHeight
-  const scale = Math.max(stageWidth / imageEl.naturalWidth, stageHeight / imageEl.naturalHeight)
+  const scale = Math.min(stageWidth / imageEl.naturalWidth, stageHeight / imageEl.naturalHeight)
   const renderedWidth = imageEl.naturalWidth * scale
   const renderedHeight = imageEl.naturalHeight * scale
   const offsetX = (stageWidth - renderedWidth) * 0.5
-  const offsetY = (stageHeight - renderedHeight) * 0.43
+  const offsetY = (stageHeight - renderedHeight) * 0.5
   const mapPoint = (p) => ({
     x: p.x * renderedWidth + offsetX,
     y: p.y * renderedHeight + offsetY,
@@ -51,7 +51,7 @@ export async function detectEyeTransform(imageEl, stageEl) {
   return {
     x: ((mappedLeft.x + mappedRight.x) / 2 / stageWidth) * 100,
     y: ((mappedLeft.y + mappedRight.y) / 2 / stageHeight) * 100 + 1,
-    width: Math.min(68, Math.max(30, (eyeDistance / stageWidth) * 215)),
+    width: Math.min(58, Math.max(18, (eyeDistance / stageWidth) * 230)),
     rotation: (Math.atan2(dy, dx) * 180) / Math.PI,
   }
 }
