@@ -22,7 +22,7 @@ const DEFAULT_FACE=asset('sample-face.jpg')
 const DEFAULT_GLASSES=[1,2,3,4,5].map(i=>asset(`glasses-${i}.png`))
 const INITIAL_TRANSFORM={x:50,y:38,width:43,rotation:0}
 const BASE_PATH=import.meta.env.BASE_URL
-const getRoute=()=>window.location.pathname.replace(BASE_PATH,'').replace(/^\//,'')
+const getRoute=()=>new URLSearchParams(window.location.search).get('route')||window.location.hash.replace(/^#\/?/,'')||window.location.pathname.replace(BASE_PATH,'').replace(/^\//,'')
 
 function ResultStage({ face,glasses,transform,setTransform,editable=false,stageRef }) {
   const drag=useRef(null); const pointers=useRef(new Map()); const gesture=useRef(null)
