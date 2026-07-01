@@ -18,8 +18,9 @@ export function LandingPage({ onNavigate }) {
       </div>
     </section>
 
-    <nav className="module-tabs" aria-label="三大核心模块">
+    <nav className="module-tabs" aria-label="四大核心模块">
       <button onClick={() => onNavigate('try-on')}><span>TRY ON</span><small>Try before you decide</small><ArrowRight/></button>
+      <button onClick={() => onNavigate('swipe')}><span>LIVE</span><small>Swipe through frames live</small><ArrowRight/></button>
       <button onClick={() => onNavigate('scenario')}><span>SCENARIO</span><small>Choose your moment</small><ArrowRight/></button>
       <button onClick={() => onNavigate('identity-test')}><span>IDENTITY</span><small>Discover your visual identity</small><ArrowRight/></button>
     </nav>
